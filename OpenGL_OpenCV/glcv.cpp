@@ -96,3 +96,64 @@ cv::Mat gl_read_depth(unsigned int win_width, unsigned int win_height, const cv:
 
 	return render_depth;
 }
+
+/**
+@brief basic function to produce an OpenGL projection matrix and associated viewport parameters
+which match a given set of camera intrinsics. 
+@param[out] viewport 4-component OpenGL viewport values, as might be retrieved by glGetIntegerv( GL_VIEWPORT, &viewport[0] )
+@param[in]  alpha x-axis focal length, from camera intrinsic matrix
+@param[in]  alpha y-axis focal length, from camera intrinsic matrix
+@param[in]  skew  x and y axis skew, from camera intrinsic matrix
+@param[in]  u0 image origin x-coordinate, from camera intrinsic matrix
+@param[in]  v0 image origin y-coordinate, from camera intrinsic matrix
+@param[in]  img_width image width, in pixels
+@param[in]  img_height image height, in pixels
+@param[in]  near_clip near clipping plane z-location, can be set arbitrarily > 0, controls the mapping of z-coordinates for OpenGL
+@param[in]  far_clip  far clipping plane z-location, can be set arbitrarily > near_clip, controls the mapping of z-coordinate for OpenGL
+*/
+cv::Mat build_opengl_projection_for_intrinsics(int *viewport, double alpha, double beta, double skew, double u0, double v0, int img_width, int img_height, double near_clip, double far_clip){
+
+	// These parameters define the final viewport that is rendered into by
+	// the camera.
+	double L = 0;
+	double R = img_width;
+	double B = 0;
+	double T = img_height;
+
+	// near and far clipping planes, these only matter for the mapping from
+	// world-space z-coordinate into the depth coordinate for OpenGL
+	double N = near_clip;
+	double F = far_clip;
+
+	// set the viewport parameters
+	viewport[0] = L;
+	viewport[1] = B;
+	viewport[2] = R - L;
+	viewport[3] = T - B;
+
+	// construct an orthographic matrix which maps from projected
+	// coordinates to normalized device coordinates in the range
+	// [-1, 1].  OpenGL then maps coordinates in NDC to the current
+	// viewport
+	cv::Mat ortho = cv::Mat::zeros(4,4,CV_32F);
+	ortho.ptr<float>(0)[0] = 2.0 / (R - L); ortho.ptr<float>(0)[3] = -(R + L) / (R - L);
+	ortho.ptr<float>(1)[1] = 2.0 / (T - B); ortho.ptr<float>(1)[3] = -(T + B) / (T - B);
+	ortho.ptr<float>(2)[2] = -2.0 / (F - N); ortho.ptr<float>(2)[3] = -(F + N) / (F - N);
+	ortho.ptr<float>(3)[3] = 1.0;
+
+	// construct a projection matrix, this is identical to the 
+	// projection matrix computed for the intrinsicx, except an
+	// additional row is inserted to map the z-coordinate to
+	// OpenGL. 
+	cv::Mat tproj = cv::Mat::zeros(4,4,CV_32F);
+	tproj.ptr<float>(0)[0] = alpha; tproj.ptr<float>(0)[1] = skew; tproj.ptr<float>(0)[2] = u0;
+	tproj.ptr<float>(1)[1] = beta; tproj.ptr<float>(1)[2] = v0;
+	tproj.ptr<float>(2)[2] = -(N + F); tproj.ptr<float>(2)[3] = -N*F;
+	tproj.ptr<float>(3)[3] = 1.0;
+
+	// resulting OpenGL frustum is the product of the orthographic
+	// mapping to normalized device coordinates and the augmented
+	// camera intrinsic matrix
+	cv::Mat frustum = ortho*tproj;
+	return frustum;
+}
