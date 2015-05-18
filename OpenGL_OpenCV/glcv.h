@@ -1,6 +1,10 @@
 #pragma once
 #include <opencv2\opencv.hpp>
 
+
+//converts from openGL depth (-1, 1) to true depth
+cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& OPENGL_PROJECTION_MATRIX);
+
 void display_mat(cv::Mat texmat, bool fullscreen);
 
 cv::Mat gl_read_color(unsigned int win_width, unsigned int win_height);

@@ -1,6 +1,42 @@
 #include "glcv.h"
 #include <GL\glut.h>
-#include <AssimpCV.h>
+
+
+cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& projection){
+	float A = projection.ptr<float>(2)[2];
+	float B = projection.ptr<float>(2)[3];
+	int numpix = depth.rows * depth.cols;
+	cv::Mat out(depth.rows, depth.cols, CV_32F);
+
+	float * depth_ptr = depth.ptr<float>();
+	float * out_ptr = out.ptr<float>();
+
+	float zNear = -B / (1.0 - A);
+	float zFar = B / (1.0 + A);
+
+	for (int i = 0; i < numpix; ++i){
+		float d = *depth_ptr;
+
+		if (d == 1) //nothing
+		{
+			*out_ptr = 0;
+		}
+		else{
+
+			//*out_ptr = 0.5 * (-A*d + B) + 0.5;
+			//*out_ptr = -2 * B / (d + 1 + 2 * A);
+			float z_b = d;
+			float z_n = 2.0 * z_b - 1.0;
+			float z_e = -2.0 * zNear * zFar / (zFar + zNear - z_n * (zFar - zNear));
+			*out_ptr = z_e;
+
+		}
+		++depth_ptr;
+		++out_ptr;
+	}
+
+	return out;
+}
 
 void display_mat(cv::Mat texmat, bool fullscreen){
 	glMatrixMode(GL_PROJECTION);
@@ -146,10 +182,10 @@ cv::Mat build_opengl_projection_for_intrinsics(int *viewport, double alpha, doub
 	// additional row is inserted to map the z-coordinate to
 	// OpenGL. 
 	cv::Mat tproj = cv::Mat::zeros(4,4,CV_32F);
-	tproj.ptr<float>(0)[0] = alpha; tproj.ptr<float>(0)[1] = skew; tproj.ptr<float>(0)[2] = u0;
-	tproj.ptr<float>(1)[1] = beta; tproj.ptr<float>(1)[2] = v0;
-	tproj.ptr<float>(2)[2] = -(N + F); tproj.ptr<float>(2)[3] = -N*F;
-	tproj.ptr<float>(3)[3] = 1.0;
+	tproj.ptr<float>(0)[0] = alpha; tproj.ptr<float>(0)[1] = skew; tproj.ptr<float>(0)[2] = -u0;
+	tproj.ptr<float>(1)[1] = beta; tproj.ptr<float>(1)[2] = -v0;
+	tproj.ptr<float>(2)[2] = (N + F); tproj.ptr<float>(2)[3] = N*F;
+	tproj.ptr<float>(3)[2] = -1.0;
 
 	// resulting OpenGL frustum is the product of the orthographic
 	// mapping to normalized device coordinates and the augmented
