@@ -3,6 +3,7 @@
 
 
 cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& projection){
+	int depth_mult = 1;
 	float A = projection.ptr<float>(2)[2];
 	float B = projection.ptr<float>(2)[3];
 	int numpix = depth.rows * depth.cols;
@@ -13,6 +14,14 @@ cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& projection){
 
 	float zNear = -B / (1.0 - A);
 	float zFar = B / (1.0 + A);
+
+	if (zNear < 0 && zFar < 0){
+		float zNear_ = -zFar;
+		float zFar_ = -zNear;
+		zNear = zNear_;
+		zFar = zFar_;
+		depth_mult = -1;
+	}
 
 	for (int i = 0; i < numpix; ++i){
 		float d = *depth_ptr;
@@ -28,7 +37,7 @@ cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& projection){
 			float z_b = d;
 			float z_n = 2.0 * z_b - 1.0;
 			float z_e = -2.0 * zNear * zFar / (zFar + zNear - z_n * (zFar - zNear));
-			*out_ptr = z_e;
+			*out_ptr = depth_mult * z_e;
 
 		}
 		++depth_ptr;
@@ -76,7 +85,13 @@ void display_mat(cv::Mat texmat, bool fullscreen){
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE, texmat.data);
+		if (texmat.channels() == 3){
+			glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE, texmat.data);
+		}
+		else if(texmat.channels() == 4){
+			glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, texmat.data);
+
+		}
 
 		glColor3f(1, 1, 1);
 
@@ -147,7 +162,7 @@ which match a given set of camera intrinsics.
 @param[in]  near_clip near clipping plane z-location, can be set arbitrarily > 0, controls the mapping of z-coordinates for OpenGL
 @param[in]  far_clip  far clipping plane z-location, can be set arbitrarily > near_clip, controls the mapping of z-coordinate for OpenGL
 */
-cv::Mat build_opengl_projection_for_intrinsics(int *viewport, double alpha, double beta, double skew, double u0, double v0, int img_width, int img_height, double near_clip, double far_clip){
+cv::Mat build_opengl_projection_for_intrinsics(int *viewport, double alpha, double beta, double skew, double u0, double v0, int img_width, int img_height, double near_clip, double far_clip, int z_neg){
 
 	// These parameters define the final viewport that is rendered into by
 	// the camera.
@@ -182,14 +197,25 @@ cv::Mat build_opengl_projection_for_intrinsics(int *viewport, double alpha, doub
 	// additional row is inserted to map the z-coordinate to
 	// OpenGL. 
 	cv::Mat tproj = cv::Mat::zeros(4,4,CV_32F);
-	tproj.ptr<float>(0)[0] = alpha; tproj.ptr<float>(0)[1] = skew; tproj.ptr<float>(0)[2] = -u0;
-	tproj.ptr<float>(1)[1] = beta; tproj.ptr<float>(1)[2] = -v0;
-	tproj.ptr<float>(2)[2] = (N + F); tproj.ptr<float>(2)[3] = N*F;
-	tproj.ptr<float>(3)[2] = -1.0;
+	tproj.ptr<float>(0)[0] = alpha; tproj.ptr<float>(0)[1] = skew; tproj.ptr<float>(0)[2] = z_neg * u0;
+	tproj.ptr<float>(1)[1] = beta; tproj.ptr<float>(1)[2] = z_neg * v0;
+	tproj.ptr<float>(2)[2] = -1 * z_neg *(N + F); tproj.ptr<float>(2)[3] = N*F;
+	tproj.ptr<float>(3)[2] = z_neg * 1.0;
 
 	// resulting OpenGL frustum is the product of the orthographic
 	// mapping to normalized device coordinates and the augmented
 	// camera intrinsic matrix
 	cv::Mat frustum = ortho*tproj;
 	return frustum;
+}
+
+cv::Mat build_opengl_projection_for_intrinsics_2(int *viewport, double alpha, double beta, double skew, double u0, double v0, int img_width, int img_height, double near_clip, double far_clip){
+	cv::Mat out = cv::Mat::zeros(4, 4, CV_32F);
+	out.ptr<float>(0)[0] = alpha / (0.5f * img_width);
+	out.ptr<float>(1)[1] = beta / (0.5f * img_height);
+	out.ptr<float>(2)[2] = -(near_clip + far_clip) / (far_clip - near_clip);
+	out.ptr<float>(2)[3] = -2 * near_clip*far_clip / (far_clip - near_clip);
+	out.ptr<float>(3)[2] = -1.0f;
+
+	return out;
 }
