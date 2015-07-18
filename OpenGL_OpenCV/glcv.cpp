@@ -1,5 +1,4 @@
 #include "glcv.h"
-#include <GL\glut.h>
 
 
 cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& projection){
@@ -47,31 +46,21 @@ cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& projection){
 	return out;
 }
 
-void display_mat(cv::Mat texmat, bool fullscreen){
-	glMatrixMode(GL_PROJECTION);
-	glPushMatrix();
-	glLoadIdentity();
-
-	glMatrixMode(GL_MODELVIEW);
-	glPushMatrix();
-
-	glLoadIdentity();
-
-
-	GLuint texture[1];
-
-	//load in cv mat as texture
+GLuint mat_to_texture(cv::Mat texmat){
 	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
+	GLuint texture[1];
+	//load in cv mat as texture
+	
 
 	if (texmat.data == NULL){
 		std::cout << "failed to load texture...\n";
+		return 0;
 	}
 	else{
 		glGenTextures(1, texture);
 
-
 		glBindTexture(GL_TEXTURE_2D, texture[0]);
-
 
 		// select modulate to mix texture with color for shading
 		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
@@ -88,13 +77,77 @@ void display_mat(cv::Mat texmat, bool fullscreen){
 		if (texmat.channels() == 3){
 			glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE, texmat.data);
 		}
-		else if(texmat.channels() == 4){
+		else if (texmat.channels() == 4){
 			glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, texmat.data);
 
 		}
 
-		glColor3f(1, 1, 1);
+		return texture[0];
+	}
 
+}
+
+
+
+void mat_to_texture(cv::Mat texmat, GLuint texture){
+	glEnable(GL_TEXTURE_2D);
+	glBindTexture(GL_TEXTURE_2D, 0);
+
+	if (texmat.data == NULL){
+		std::cout << "failed to load texture...\n";
+		return;
+	}
+	else{
+		glBindTexture(GL_TEXTURE_2D, texture);
+
+		// select modulate to mix texture with color for shading
+		glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+
+		// when texture area is small, bilinear filter the closest mipmap
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		// if wrap is true, the texture wraps over at the edges (repeat)
+		//       ... false, the texture ends at the edges (clamp)
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+		glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+
+		if (texmat.channels() == 3){
+			glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGR_EXT, GL_UNSIGNED_BYTE, texmat.data);
+		}
+		else if (texmat.channels() == 4){
+			glTexImage2D(GL_TEXTURE_2D, 0, 4, texmat.cols, texmat.rows, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE, texmat.data);
+
+		}
+	}
+
+}
+
+void display_mat(cv::Mat texmat, bool fullscreen){
+	glMatrixMode(GL_PROJECTION);
+	glPushMatrix();
+	glLoadIdentity();
+
+	glMatrixMode(GL_MODELVIEW);
+	glPushMatrix();
+
+	glLoadIdentity();
+
+
+
+
+	if (texmat.data == NULL){
+		std::cout << "failed to load texture...\n";
+	}
+	else{
+
+		GLuint texture[1];
+
+		texture[0] = mat_to_texture(texmat);
+		glEnable(GL_TEXTURE_2D);
+		glBindTexture(GL_TEXTURE_2D, texture[0]);
+
+		glColor3f(1, 1, 1);
 
 		if (fullscreen){
 			glBegin(GL_QUADS);
@@ -111,8 +164,6 @@ void display_mat(cv::Mat texmat, bool fullscreen){
 		glDeleteTextures(1, texture);
 
 	}
-
-
 
 	glMatrixMode(GL_PROJECTION);
 	glPopMatrix();
@@ -218,4 +269,59 @@ cv::Mat build_opengl_projection_for_intrinsics_2(int *viewport, double alpha, do
 	out.ptr<float>(3)[2] = -1.0f;
 
 	return out;
+}
+
+cv::Mat draw_normals(const cv::Mat& depth_img, const cv::Mat& camera_matrix){
+	cv::Mat camera_matrix_inv = camera_matrix.inv();
+	cv::Mat normal_display(depth_img.size(), CV_32FC3);
+	cv::Vec3f half(0.5, 0.5, 0.5);
+	for (int y = 0; y < depth_img.rows-1; ++y){
+		for (int x = 0; x < depth_img.cols-1; ++x){
+			
+			cv::Vec3f v(0, 0, 0);
+
+			if (depth_img.ptr<float>(y)[x] == 0 || depth_img.ptr<float>(y + 1)[x] == 0 || depth_img.ptr<float>(y)[x + 1] == 0){
+			}
+			else{
+				depth_img.ptr<float>(y)[x];
+
+				cv::Mat pts_screen = cv::Mat::ones(4,3,CV_32F);
+				pts_screen.ptr<float>(0)[0] = x;
+				pts_screen.ptr<float>(1)[0] = y;
+				pts_screen.ptr<float>(0)[1] = x+1;
+				pts_screen.ptr<float>(1)[1] = y;
+				pts_screen.ptr<float>(0)[2] = x;
+				pts_screen.ptr<float>(1)[2] = y+1;
+				cv::Mat pts_camplane = camera_matrix_inv * pts_screen;
+
+				cv::Vec3f pt_camera_0(pts_camplane.ptr<float>(0)[0], 
+					pts_camplane.ptr<float>(1)[0], 
+					pts_camplane.ptr<float>(2)[0]);
+				pt_camera_0 *= depth_img.ptr<float>(y)[x];;
+
+				cv::Vec3f pt_camera_1x(pts_camplane.ptr<float>(0)[1],
+					pts_camplane.ptr<float>(1)[1],
+					pts_camplane.ptr<float>(2)[1]);
+				pt_camera_1x *= depth_img.ptr<float>(y)[x+1];;
+
+				cv::Vec3f pt_camera_1y(pts_camplane.ptr<float>(0)[2],
+					pts_camplane.ptr<float>(1)[2],
+					pts_camplane.ptr<float>(2)[2]);
+				pt_camera_1y *= depth_img.ptr<float>(y+1)[x];;
+
+				v = (pt_camera_1y - pt_camera_0).cross(pt_camera_1x - pt_camera_0);
+				if (v(2) == 0){
+					v = cv::Vec3f(0, 0, 0);
+				}
+				else{
+					v = cv::normalize(v);
+				}
+			}
+
+			normal_display.ptr<cv::Vec3f>(y)[x] = v / 2 + half;
+
+		}
+	}
+
+	return normal_display;
 }

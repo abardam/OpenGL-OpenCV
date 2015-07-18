@@ -1,10 +1,12 @@
 #pragma once
 #include <opencv2\opencv.hpp>
-
+#include <GL\glut.h>
 
 //converts from openGL depth (-1, 1) to true depth
 cv::Mat depth_to_z(cv::Mat& depth, const cv::Mat& OPENGL_PROJECTION_MATRIX);
 
+GLuint mat_to_texture(cv::Mat texmat);
+void mat_to_texture(cv::Mat texmat, GLuint texture);
 void display_mat(cv::Mat texmat, bool fullscreen);
 
 cv::Mat gl_read_color(unsigned int win_width, unsigned int win_height);
@@ -27,3 +29,6 @@ which match a given set of camera intrinsics. http://jamesgregson.blogspot.jp/20
 */
 cv::Mat build_opengl_projection_for_intrinsics(int *viewport, double alpha, double beta, double skew, double u0, double v0, int img_width, int img_height, double near_clip, double far_clip, int z_neg=1);
 cv::Mat build_opengl_projection_for_intrinsics_2(int *viewport, double alpha, double beta, double skew, double u0, double v0, int img_width, int img_height, double near_clip, double far_clip);
+
+
+cv::Mat draw_normals(const cv::Mat& depth_img, const cv::Mat& camera_matrix);
