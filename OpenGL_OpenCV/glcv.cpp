@@ -275,6 +275,20 @@ cv::Mat draw_normals(const cv::Mat& depth_img, const cv::Mat& camera_matrix){
 	cv::Mat camera_matrix_inv = camera_matrix.inv();
 	cv::Mat normal_display(depth_img.size(), CV_32FC3);
 	cv::Vec3f half(0.5, 0.5, 0.5);
+
+	float a = camera_matrix_inv.ptr<float>(0)[0];
+	float b = camera_matrix_inv.ptr<float>(0)[1];
+	float c = camera_matrix_inv.ptr<float>(0)[2];
+	float d = camera_matrix_inv.ptr<float>(0)[3];
+	float e = camera_matrix_inv.ptr<float>(1)[0];
+	float f = camera_matrix_inv.ptr<float>(1)[1];
+	float g = camera_matrix_inv.ptr<float>(1)[2];
+	float h = camera_matrix_inv.ptr<float>(1)[3];
+	float i = camera_matrix_inv.ptr<float>(2)[0];
+	float j = camera_matrix_inv.ptr<float>(2)[1];
+	float k = camera_matrix_inv.ptr<float>(2)[2];
+	float l = camera_matrix_inv.ptr<float>(2)[3];
+
 	for (int y = 0; y < depth_img.rows-1; ++y){
 		for (int x = 0; x < depth_img.cols-1; ++x){
 			
@@ -285,29 +299,33 @@ cv::Mat draw_normals(const cv::Mat& depth_img, const cv::Mat& camera_matrix){
 			else{
 				depth_img.ptr<float>(y)[x];
 
-				cv::Mat pts_screen = cv::Mat::ones(4,3,CV_32F);
-				pts_screen.ptr<float>(0)[0] = x;
-				pts_screen.ptr<float>(1)[0] = y;
-				pts_screen.ptr<float>(0)[1] = x+1;
-				pts_screen.ptr<float>(1)[1] = y;
-				pts_screen.ptr<float>(0)[2] = x;
-				pts_screen.ptr<float>(1)[2] = y+1;
-				cv::Mat pts_camplane = camera_matrix_inv * pts_screen;
+				//cv::Mat pts_screen = cv::Mat::ones(4,3,CV_32F);
+				//pts_screen.ptr<float>(0)[0] = x;
+				//pts_screen.ptr<float>(1)[0] = y;
+				//pts_screen.ptr<float>(0)[1] = x+1;
+				//pts_screen.ptr<float>(1)[1] = y;
+				//pts_screen.ptr<float>(0)[2] = x;
+				//pts_screen.ptr<float>(1)[2] = y+1;
+				//cv::Mat pts_camplane = camera_matrix_inv * pts_screen;
 
-				cv::Vec3f pt_camera_0(pts_camplane.ptr<float>(0)[0], 
-					pts_camplane.ptr<float>(1)[0], 
-					pts_camplane.ptr<float>(2)[0]);
+				//cv::Vec3f pt_camera_0(pts_camplane.ptr<float>(0)[0], 
+				//	pts_camplane.ptr<float>(1)[0], 
+				//	pts_camplane.ptr<float>(2)[0]);
+
+				cv::Vec3f pt_camera_0(a*x + b*y + c + d, e*x + f*y + g + h, i*x + j*y + k + l);
 				pt_camera_0 *= depth_img.ptr<float>(y)[x];;
 
-				cv::Vec3f pt_camera_1x(pts_camplane.ptr<float>(0)[1],
-					pts_camplane.ptr<float>(1)[1],
-					pts_camplane.ptr<float>(2)[1]);
-				pt_camera_1x *= depth_img.ptr<float>(y)[x+1];;
+				//cv::Vec3f pt_camera_1x(pts_camplane.ptr<float>(0)[1],
+				//	pts_camplane.ptr<float>(1)[1],
+				//	pts_camplane.ptr<float>(2)[1]);
+				cv::Vec3f pt_camera_1x(a*(x+1) + b*y + c + d, e*(x+1) + f*y + g + h, i*(x+1) + j*y + k + l);
+				pt_camera_1x *= depth_img.ptr<float>(y)[x + 1];;
 
-				cv::Vec3f pt_camera_1y(pts_camplane.ptr<float>(0)[2],
-					pts_camplane.ptr<float>(1)[2],
-					pts_camplane.ptr<float>(2)[2]);
-				pt_camera_1y *= depth_img.ptr<float>(y+1)[x];;
+				//cv::Vec3f pt_camera_1y(pts_camplane.ptr<float>(0)[2],
+				//	pts_camplane.ptr<float>(1)[2],
+				//	pts_camplane.ptr<float>(2)[2]);
+				cv::Vec3f pt_camera_1y(a*x + b*(y+1) + c + d, e*x + f*(y+1) + g + h, i*x + j*(y+1) + k + l);
+				pt_camera_1y *= depth_img.ptr<float>(y + 1)[x];;
 
 				v = (pt_camera_1y - pt_camera_0).cross(pt_camera_1x - pt_camera_0);
 				if (v(2) == 0){
